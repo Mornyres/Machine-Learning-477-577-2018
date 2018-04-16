@@ -1,6 +1,3 @@
-
-//This code will run in both opencv 2 and 3. Just change the first two macros in the code according to the requirement.
-
 #define USE_OPENCV_3
 //#define USE_OPENCV_2
 
@@ -52,9 +49,9 @@ void loadTrainTestLabel(string &pathName, vector<Mat> &trainCells, vector<Mat> &
 
     Mat img = imread(pathName,CV_LOAD_IMAGE_GRAYSCALE);
     int ImgCount = 0;
-    for(unsigned int i = 0; i < img.rows; i = i + SZ)
+    for(int i = 0; i < img.rows; i = i + SZ)
     {
-        for(unsigned int j = 0; j < img.cols; j = j + SZ)
+        for(int j = 0; j < img.cols; j = j + SZ)
         {
             Mat digitImg = (img.colRange(j,j+SZ).rowRange(i,i+SZ)).clone();
             if(j < int(0.9*img.cols))
@@ -72,14 +69,16 @@ void loadTrainTestLabel(string &pathName, vector<Mat> &trainCells, vector<Mat> &
     cout << "Image Count : " << ImgCount << endl;
     float digitClassNumber = 0;
 
-    for(unsigned int z=0;z<int(0.9*ImgCount);z++){
+    // Loop through array of images, attributing each to a digit for training
+    for(int z=0;z<int(0.9*ImgCount);z++){
         if(z % 450 == 0 && z != 0){
             digitClassNumber = digitClassNumber + 1;
             }
         trainLabels.push_back(digitClassNumber);
     }
+    // add digits to testing set
     digitClassNumber = 0;
-    for(unsigned int z=0;z<int(0.1*ImgCount);z++){
+    for(int z=0;z<int(0.1*ImgCount);z++){
         if(z % 50 == 0 && z != 0){
             digitClassNumber = digitClassNumber + 1;
             }
@@ -137,12 +136,12 @@ void ConvertVectortoMatrix(vector<vector<float> > &trainHOG, vector<vector<float
     int descriptor_size = trainHOG[0].size();
     
     for(unsigned int i = 0;i<trainHOG.size();i++){
-        for(unsigned int j = 0;j<descriptor_size;j++){
+        for(int j = 0;j<descriptor_size;j++){
            trainMat.at<float>(i,j) = trainHOG[i][j]; 
         }
     }
     for(unsigned int i = 0;i<testHOG.size();i++){
-        for(unsigned int j = 0;j<descriptor_size;j++){
+        for(int j = 0;j<descriptor_size;j++){
             testMat.at<float>(i,j) = testHOG[i][j]; 
         }
     }
@@ -158,41 +157,33 @@ void getSVMParams(SVM *svm)
     cout << "Gamma           : " << svm->getGamma() << endl;
 }
 
-void SVMtrain(Mat &trainMat,vector<int> &trainLabels, Mat &testResponse,Mat &testMat){
-#ifdef USE_OPENCV_2
-    CvSVMParams params;
-    params.svm_type    = CvSVM::C_SVC;
-    params.kernel_type = CvSVM::RBF;
-    params.gamma = 0.50625;
-    params.C = 2.5;
-    CvSVM svm;
-    CvMat tryMat = trainMat;
-    Mat trainLabelsMat(trainLabels.size(),1,CV_32FC1);
+void SVMtrain(Mat &trainMat,vector<int> &trainLabels, Mat &testResponse,Mat &testMat, char method,
+    float desiredC,
+    float desiredGamma){
 
-    for(unsigned int i = 0; i< trainLabels.size();i++){
-        trainLabelsMat.at<float>(i,0) = trainLabels[i];
+      Ptr<SVM> svm = SVM::create();
+      svm->setGamma(desiredGamma);
+      svm->setC(desiredC);
+      
+      svm->setKernel(SVM::RBF);
+      svm->setType(SVM::C_SVC);
+      Ptr<TrainData> td = TrainData::create(trainMat, ROW_SAMPLE, trainLabels);
+    
+    if (method == 'm'){
+      svm->train(td);
     }
-    CvMat tryMat_2 = trainLabelsMat;
-    svm.train(&tryMat,&tryMat_2, Mat(), Mat(), params);
-    svm.predict(testMat,testResponse);
-#endif
-#ifdef USE_OPENCV_3
-    Ptr<SVM> svm = SVM::create();
-    svm->setGamma(0.50625);
-    svm->setC(12.5);
-    svm->setKernel(SVM::RBF);
-    svm->setType(SVM::C_SVC);
-    Ptr<TrainData> td = TrainData::create(trainMat, ROW_SAMPLE, trainLabels);
-    svm->train(td);
-    //svm->trainAuto(td);
-    svm->save("model4.yml");
+    else{
+      svm->trainAuto(td);
+    }
+
+    svm->save("model.yml");
     svm->predict(testMat, testResponse);
     getSVMParams(svm);
-#endif
 }
+
 void SVMevaluate(Mat &testResponse,float &count, float &accuracy,vector<int> &testLabels){
 
-    for(unsigned int i=0;i<testResponse.rows;i++)
+    for(int i=0;i<testResponse.rows;i++)
     {
         //cout << testResponse.at<float>(i,0) << " " << testLabels[i] << endl;
         if(testResponse.at<float>(i,0) == testLabels[i]){
@@ -201,7 +192,7 @@ void SVMevaluate(Mat &testResponse,float &count, float &accuracy,vector<int> &te
     }
     accuracy = (count/testResponse.rows)*100;
 }
-int main(){
+int main(int argc, char* argv[]){
 
     vector<Mat> trainCells;
     vector<Mat> testCells;
@@ -226,9 +217,19 @@ int main(){
     ConvertVectortoMatrix(trainHOG,testHOG,trainMat,testMat);
     
     Mat testResponse;
-    SVMtrain(trainMat,trainLabels,testResponse,testMat); 
-    
-    
+
+    if (argc == 3){
+      // Manual mode
+      float desiredC, desiredGamma;
+      desiredC = atof(argv[1]);
+      desiredGamma = atof(argv[2]);
+      SVMtrain(trainMat,trainLabels,testResponse,testMat,'m',desiredC,desiredGamma); 
+    }
+    else{
+    // Auto mode (much slower, more accurate; recursive)
+      SVMtrain(trainMat,trainLabels,testResponse,testMat,'a',0,0); 
+    }
+
     float count = 0;
     float accuracy = 0 ;
     SVMevaluate(testResponse,count,accuracy,testLabels);

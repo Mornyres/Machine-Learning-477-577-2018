@@ -3,6 +3,8 @@
 # directly copies the TARGET.bin without the need for stlink
 TARGET = test
 
+OUTPUTS = model.yml
+
 OBJS   = train_digits.cpp 
 CXX 	 = g++
 
@@ -18,4 +20,4 @@ $(TARGET): $(OBJS)
 	$(CXX)  -o $(TARGET) $(CXXFLAGS) $(OBJS) $(LIBS)
 
 clean:
-	rm -f $(OBJS)
+	rm -f $(TARGET) $(OUTPUTS)
