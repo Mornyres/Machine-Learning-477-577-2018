@@ -173,6 +173,7 @@ void SVMtrain(Mat &trainMat,vector<int> &trainLabels, Mat &testResponse,Mat &tes
       svm->train(td);
     }
     else{
+      cout << "Automatic training may take a while... did you mean to specify C and gamma respectively?" << endl;
       svm->trainAuto(td);
     }
 
@@ -225,9 +226,20 @@ int main(int argc, char* argv[]){
       desiredGamma = atof(argv[2]);
       SVMtrain(trainMat,trainLabels,testResponse,testMat,'m',desiredC,desiredGamma); 
     }
-    else{
+    
+    else if ((argc == 2) && (!strncmp(argv[1], "sweep",5))){
+      SVMtrain(trainMat, trainLabels, testResponse, testMat, 'm', 12.5, 0.5625);
+    }
+    
+    else if ((argc==2) && (!strncmp(argv[1],"auto",4))){
     // Auto mode (much slower, more accurate; recursive)
-      SVMtrain(trainMat,trainLabels,testResponse,testMat,'a',0,0); 
+      SVMtrain(trainMat,trainLabels,testResponse,testMat,'a',1,1); 
+    }
+    
+    else{
+      cout << "Usage: ./test\t[options]" << endl << "\t\tsweep|auto|(C gamma)"<<endl;
+      cerr << "Option not found; exiting..." << endl;
+      exit(1);
     }
 
     float count = 0;
